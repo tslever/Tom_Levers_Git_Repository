@@ -1,0 +1,226 @@
+---
+title: "Model_Selection_Of_Abalones"
+author: "Brook Tarekegn Assefa"
+date: "2022-11-14"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Model Selection Of Abalones
+
+
+### Import the necessary packages 
+```{r,echo=FALSE, include=FALSE}
+library(leaps)
+library(ggplot2)
+library(tidyverse)
+```
+
+# Import the data and look at the first six rows
+
+```{r}
+Data <- read.csv("Data_Set--Abalone_Marine_Snails--With_Column_Names.csv")
+head(Data)
+```
+
+# Let us first look at the Histogram of the rings Dataset, it seems to be slightly 
+right skewed
+
+```{r}
+hist(Data$rings)
+```
+We might have to consider the Log transformation to flatten out the data and 
+create a fairly Normal distribution ***Waiting for comment from other teammates***
+```{r}
+data<- Data %>% 
+  select(-c(sex))
+data<- log(data)
+hist(data$rings)
+```
+### First, perform all possible regressions
+
+The age and number of rings of a blacklip abalone has a moderate correlation 
+with all variables other than sex and shucked weight of the abalone,
+for which correlation is low.
+
+***The following order was suggested in our proposal: shell weight, shucked***
+***weight, diameter, whole weight, sex, viscera weight, and height. ***
+As we can observer the if we consider one predictor model, 
+what is the best one predictor?
+This turns out to be the shell_weight as stated in our proposal.
+If I consider two predictive model what turned out to be the best two predictive 
+model are shell weight and shucked weight respectively; and the process goes on 
+as per the suggested order.
+
+```{r}
+allregressions <- regsubsets(rings~., force.out=NULL, data=Data, nbest=1) 
+summary(allregressions)
+```
+From this we would like to extract the best model based on the following criteria:-
+**criteria 1**:- Having High/Maximum Adjusted R Squared value 
+**criteria 2**:- Having Low Mallow's CP
+**criteria 3**:- Having Low BIC 
+The Mallow's Cp and BIC are usually similar. 
+ 
+ ### These can now be extracted from the summary
+```{r}
+names(summary(allregressions))
+```
+
+
+### adjusted R 2 ?
+
+```{r}
+which.max(summary(allregressions)$adjr2)
+```
+
+### Mallow’s Cp ?
+
+```{r}
+which.min(summary(allregressions)$cp)
+```
+
+### BIC ?
+
+```{r}
+which.min(summary(allregressions)$bic)
+```
+
+Based on the above response of the *allregressions object* we can observe that 
+Model 7 has the best adjusted R2 , Mallow's Cp and BIC. Therefore we can get
+the corresponding coefficients and predictors of these models, and they all 
+have shell_weight, sex, diameter, height, whole_weight, shucked_weight and 
+viscera_weight.
+
+Since Model 7 is the best model selected we can get the coefficient as follows:- 
+```{r}
+coef(allregressions, which.max(summary(allregressions)$adjr2))
+```
+
+
+We will then use the **Forward selection** , **Backward Selection** and 
+the **Bidirectional selection** to find the best model according to AIC?
+
+
+### Intercept only model
+```{r}
+regnull <- lm(rings~1, data=Data)
+```
+
+
+### Model with all predictors
+```{r}
+regfull <- lm(rings~., data=Data)
+```
+
+### Let us first carry out the  **Forward selection**.
+```{r}
+step(regnull, scope=list(lower=regnull, upper=regfull), direction="forward")
+```
+Therefore we can understand from the **Forward selection** all predictors are included 
+except the **length predictor**. Indicating that the seven predictors listed below 
+are significant predictors.
+
+### Therefore the regression equation selected is as the following for y hat:- 
+
+$$
+\hat{y} = 3.87038 + 8.75078x_1 -19.80258x_2 + 10.56951 x_3 + 8.97751x_4 -0.76889x_5
+-10.61279x_6 + 10.74911x_7
+$$
+
+
+### Let us now carry out the  **Backward selection**.
+```{r}
+step(regfull, scope=list(lower=regnull, upper=regfull), direction="backward")
+```
+
+
+
+Therefore we can understand from the **Backward selection** also includes all predictors 
+except the **length predictor**. Indicating that the seven predictors listed below 
+are significant predictors. T
+### Therefore the regression equation selected is as the following for y hat:- 
+
+$$
+\hat{y} = 3.87038 + 8.75078x_1 -19.80258x_2 + 10.56951 x_3 + 8.97751x_4 -0.76889x_5
+-10.61279x_6 + 10.74911x_7
+$$
+
+This doesn't help much as it is similar to the forward selection. 
+
+Since in our proposal we have mentioned that the observed correlation among the 
+rings has a moderate correlation with all variables other than
+sex and shucked weight of the abalone. We would like to force out these values and perform the 
+**Backward selection**.
+```{r}
+data_set_with_numeric_sex <-
+    Data %>%
+    mutate(sex = replace(sex, sex == 'M', 0)) %>%
+    mutate(sex = replace(sex, sex == 'F', 1)) %>%
+    mutate(sex = replace(sex, sex == 'I', 2))
+data_set_with_numeric_sex$sex <- as.numeric(data_set_with_numeric_sex$sex)
+correlation_matrix <- cor(data_set_with_numeric_sex)
+correlation_matrix
+```
+
+### Model with all predictors except excluding the sex and shucked weight of the abalone.
+```{r}
+regfull_excluding_sex_shucked_weight <- lm(rings~ diameter+height+whole_weight+viscera_weight+shell_weight+length, data=Data)
+```
+
+### Perform the Backward elimination from the regfull
+
+```{r}
+step(regfull_excluding_sex_shucked_weight, scope=list(lower=regnull, upper=regfull_excluding_sex_shucked_weight), direction="backward")
+```
+
+After excluding the sex and shucked_weight we can observe that this change has rendered 
+the **viscera weight** as insignificant predictor.
+### Therefore our adjusted regression equation for y hat is :- 
+
+$$
+\hat{y} = 3.702 + 14.387x_1 + 13.085x_2 - 5.959x_3 + 26.202x_4 -5.308x_5
+$$
+
+ If We would like to force out the sex and shucked weight of the abalone 
+ and perform the **Bidirectional selection**, we would have found the same result 
+ as the one stated above.
+ 
+ 
+But if we do perform the **Forward selection** we can see that the *viscera_weight*
+weight is considered as a significant predictor , 
+which was dropped by **Backward and Bidirectional selections.**
+```{r}
+step(regfull_excluding_sex_shucked_weight, scope=list(lower=regnull, upper=regfull_excluding_sex_shucked_weight), direction="forward")
+```
+ ### Therefore our Forward selection regression equation for y hat is :- 
+
+$$
+\hat{y} = 3.674 + 14.318x_1 + 13.176x_2 - 5.671x_3 -1.203x_4 + 26.017x_5 -5.183x_6  
+$$
+ 
+ 
+Therefore 
+**Forward selection**:- 
+$$
+x_1 , x_2 , x_3 ,x_4 ,x_5 , x_6  
+$$
+**Backward elimination** and **Stepwise regression** 
+
+$$
+x_1 , x_2 , x_3 ,x_4 ,x_5
+$$
+"***Berk [1978]*** has noted that **forward selection**
+tends to agree with all possible regressions for **small subset sizes** but not for large
+ones, while b**ackward elimination** tends to agree with all possible regressions for
+large subset sizes but not for small ones." 
+Based on this our final regression equation and the model selection based on the AIC is 
+excluding the  **viscera weight** (which is of a blacklip abalone is the gut weight after bleeding.)
+When thinking logically about it , it seems like it does not have any relation
+with the age of an abalone at all.
+$$
+\hat{y} = 3.702 + 14.387x_1 + 13.085x_2 - 5.959x_3 + 26.202x_4 -5.308x_5
+$$
+ 
+ 
